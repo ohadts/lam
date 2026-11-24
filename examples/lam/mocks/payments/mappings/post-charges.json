@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/charges",
+    "bodyPatterns": [{ "matchesJsonPath": "$.amount" }]
+  },
+  "response": {
+    "status": 201,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "id": "ch_{{randomValue length=12 type='ALPHANUMERIC'}}",
+      "status": "succeeded",
+      "amount": "{{jsonPath request.body '$.amount'}}"
+    },
+    "transformers": ["response-template"]
+  }
+}

@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://unpkg.com/@lam/core/schema/asset.v1.json
+# A project-local custom asset: a stub of an internal legacy CRM REST service,
+# implemented as a WireMock container with mappings shipped next to this file.
+apiVersion: lam.dev/v1
+kind: Asset
+metadata:
+  name: legacy-crm
+  version: 0.1.0
+  title: Legacy CRM stub
+  description: Stubbed customer lookup endpoints of the internal CRM.
+  tags: [internal, http, mock]
+  license: Apache-2.0
+
+spec:
+  parameters:
+    latencyMs: { type: integer, default: 0, minimum: 0, description: Fixed delay added to every response }
+
+  services:
+    main:
+      image: wiremock/wiremock:3.9.1        # verify tag at build time
+      command: ["--global-response-templating", "--disable-banner"]
+      ports:
+        - name: http
+          container: 8080
+      files:
+        # `template` = ${} interpolation, then Handlebars. `\{{` emits a literal `{{`
+        # so WireMock's own response templating survives.
+        - target: /home/wiremock/mappings/customers.json
+          template: |
+            {
+              "mappings": [
+                {
+                  "request": { "method": "GET", "urlPathPattern": "/customers/([0-9]+)" },
+                  "response": {
+                    "status": 200,
+                    "fixedDelayMilliseconds": ${params.latencyMs},
+                    "headers": { "Content-Type": "application/json" },
+                    "jsonBody": { "id": "\{{request.pathSegments.[1]}}", "name": "Test Customer", "tier": "gold" }
+                  }
+                },
+                {
+                  "request": { "method": "GET", "urlPath": "/health" },
+                  "response": { "status": 200, "body": "ok" }
+                }
+              ]
+            }
+      readiness:
+        http: { port: http, path: /health, expectStatus: 200 }
+        interval: 1s
+        retries: 30
+
+  outputs:
+    host: "${service.main.host}"
+    port: "${service.main.ports.http}"
+    baseUrl: "http://${outputs.host}:${outputs.port}"
+
+  env:
+    common:
+      LEGACY_CRM_BASE_URL: "${outputs.baseUrl}"
+    spring:
+      crm.base-url: "${outputs.baseUrl}"

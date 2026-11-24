@@ -1,0 +1,57 @@
+# Example project used by LAM's own e2e tests.
+# A Spring Boot "orders" service: Postgres, Redis, Azure Service Bus, Blob Storage,
+# a recorded third-party payments API, and an internal legacy CRM stub.
+lamVersion: 1
+name: orders-service
+
+assets:
+  db:
+    use: postgres@16
+    with:
+      databases: [orders, orders_test]
+      user: app
+      password: app
+    ports:
+      postgres: 5432
+    seed:
+      sql: ./lam/db/init
+
+  cache:
+    use: redis@7
+
+  bus:
+    use: azure-service-bus
+    with:
+      queues: [orders.created, orders.cancelled]
+      topics:
+        - name: payments
+          subscriptions: [orders-svc]
+
+  storage:
+    use: azurite
+    with:
+      containers: [invoices]
+
+  payments-api:
+    use: http-mock
+    with:
+      mappings: ./lam/mocks/payments
+      recordTarget: https://sandbox.payments.example.com
+      strict: true
+
+  legacy-crm:
+    use: ./lam/assets/legacy-crm.lam.yaml
+
+env:
+  outputs:
+    - format: dotenv
+      path: .env.lam
+    - format: spring-yaml
+      path: src/main/resources/application-lam.yml
+  vars:
+    SPRING_PROFILES_ACTIVE: lam
+    PAYMENTS_BASE_URL: "${assets.payments-api.outputs.baseUrl}"
+    CRM_BASE_URL: "${assets.legacy-crm.outputs.baseUrl}"
+
+profiles:
+  minimal: [db, cache]
